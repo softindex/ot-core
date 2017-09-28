@@ -1,0 +1,15 @@
+{
+  "passPerPreset": true,
+  "presets": [
+    ["env", {
+      "targets": {
+        "node": "current"
+      }
+    }],
+    "stage-0",
+    "flow"
+  ],
+  "plugins": [
+    "transform-runtime"
+  ]
+}

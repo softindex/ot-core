@@ -1,0 +1,46 @@
+{
+  "name": "ot-core",
+  "version": "0.1.0",
+  "description": "Operational transformation manager",
+  "main": "./lib",
+  "scripts": {
+    "test": "jest",
+    "flow": "flow",
+    "build": "babel src --out-dir lib"
+  },
+  "keywords": [
+    "op",
+    "operational",
+    "transformation"
+  ],
+  "license": "BSD",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-jest": "^21.0.2",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-flow": "^6.23.0",
+    "babel-preset-stage-0": "^6.24.1",
+    "flow-bin": "^0.92.1",
+    "jest": "^21.0.2",
+    "regenerator-runtime": "^0.11.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testRegex": "/__tests__/",
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/test/*.js"
+    ]
+  },
+  "dependencies": {
+    "cross-fetch": "^3.0.1",
+    "lodash": "^4.17.4",
+    "node-fetch": "^2.3.0",
+    "tinyqueue": "^1.2.2",
+    "whatwg-fetch": "^3.0.0"
+  }
+}
