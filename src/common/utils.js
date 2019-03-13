@@ -51,3 +51,39 @@ export function isEqual<T>(a: Set<T>, b: Set<T>): boolean {
 
   return true;
 }
+
+export function serial(
+  fn: () => Promise<void>
+): () => Promise<void> {
+  let currentPromise = null;
+  let nextPromise = null;
+  let resolveNext = null;
+  let rejectNext = null;
+
+  return function start(): Promise<void> {
+    if (currentPromise) {
+      if (!nextPromise) {
+        nextPromise = new Promise((resolve, reject) => {
+          resolveNext = resolve;
+          rejectNext = reject;
+        });
+      }
+      return nextPromise;
+    }
+
+    currentPromise = fn();
+
+    currentPromise
+      .finally(() => {
+        currentPromise = null;
+        if (nextPromise !== null) {
+          start().then(resolveNext).catch(rejectNext);
+          resolveNext = null;
+          rejectNext = null;
+          nextPromise = null;
+        }
+      });
+
+    return currentPromise;
+  };
+}

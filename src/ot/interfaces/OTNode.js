@@ -23,13 +23,11 @@ export interface OTNode<TKey, TState> {
     level: number
   ): Promise<Blob>;
 
-  push(commitData: Blob): Promise<TKey>;
+  push(commitData: Blob): Promise<fetchData<TKey, TState>>;
 
   checkout(): Promise<fetchData<TKey, TState>>;
 
   fetch(currentCommitId: TKey): Promise<fetchData<TKey, TState>>;
 
-  addChangeListener(listener: () => void): void;
-
-  removeChangeListener(listener: () => void): void;
+  poll(currentCommitId: TKey): Promise<fetchData<TKey, TState>>;
 }

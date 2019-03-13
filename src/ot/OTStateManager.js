@@ -9,10 +9,12 @@
 // @flow
 
 import assert from 'assert';
+import EventEmitter from 'events';
+import {serial} from '../common/utils';
 
 import type OTSystem from "./OTSystem/OTSystem";
 import type {OTOperation} from "./interfaces/OTOperation";
-import type {OTNode} from "./interfaces/OTNode";
+import type {OTNode, fetchData} from "./interfaces/OTNode";
 
 type provider<T> = () => T;
 
@@ -26,8 +28,8 @@ export class OTStateManager<TKey, TState> {
   _level: number | null;
   _workingOperations: Array<OTOperation<TState>>;
   _pendingCommit: Blob | null;
-  _pendingCommitOperations: Array<OTOperation<TState>>;
-  _syncing: boolean;
+  _eventEmitter: EventEmitter = new EventEmitter();
+  _poll: Promise<void> | null = null;
 
   constructor(
     initState: provider<TState>,
@@ -39,66 +41,62 @@ export class OTStateManager<TKey, TState> {
     this._otSystem = otSystem;
 
     this._invalidateInternalState();
-    this._syncing = false;
-  }
-
-  addChangeListener(listener: () => void): void {
-    this._otNode.addChangeListener(listener);
-  }
-
-  removeChangeListener(listener: () => void): void {
-    this._otNode.removeChangeListener(listener);
   }
 
   getState(): TState {
     return this._state;
   }
 
+  getRevision(): TKey | null {
+    return this._revision;
+  }
+
+  addChangeListener(listener: TState => void): void {
+    this._eventEmitter.addListener('change', listener);
+
+    if (this._revision !== null) {
+      this._startPolling();
+    }
+  }
+
+  removeChangeListener(listener: TState => void): void {
+    this._eventEmitter.removeListener('change', listener);
+  }
+
   async checkout() {
+    // Ignore if already initialized
     if (this._revision !== null) {
       return;
     }
 
     const {diffs, revision, level} = await this._otNode.checkout();
+
+    // Fix for two parallel checkout calling
+    if (this._revision !== null) {
+      return;
+    }
+
     this._apply(diffs);
     this._revision = revision;
     this._level = level;
+
+    this._startPolling();
   }
 
-  async sync(): Promise<void> {
+  sync = serial(async (): Promise<void> => {
     assert(this._revision !== null, 'Checkout has not been called');
-    assert(!this._syncing, 'You can use run only one sync at time');
 
-    this._syncing = true;
-
-    try {
-      if (this._pendingCommit === null) {
-        await this._pull();
-      } else {
-        await this._push();
-      }
-
-      if (this._workingOperations.length) {
-        await this._commit();
-        await this._push();
-      }
-    } finally {
-      this._syncing = false;
+    if (this._pendingCommit === null) {
+      await this._pull(commitId => this._otNode.fetch(commitId));
+    } else {
+      await this._push();
     }
-  }
 
-  reset(): void {
-    const operations = [
-      ...this._pendingCommitOperations,
-      ...this._workingOperations
-    ];
-
-    this._apply(this._otSystem.invert(operations));
-
-    this._workingOperations = [];
-    this._pendingCommitOperations = [];
-    this._pendingCommit = null;
-  }
+    if (this._workingOperations.length) {
+      await this._commit();
+      await this._push();
+    }
+  });
 
   add(operations: Array<OTOperation<TState>>): void {
     try {
@@ -112,29 +110,25 @@ export class OTStateManager<TKey, TState> {
       this._invalidateInternalState();
       throw e;
     }
+
+    this._eventEmitter.emit('change', this._state);
   }
 
-  getRevision() {
-    return this._revision;
-  }
-
-  async _pull(): Promise<void> {
+  async _pull(
+    fetchFunction: TKey => Promise<fetchData<TKey, TState>>
+  ): Promise<void> {
     if (this._revision === null) {
       throw new Error('Need to call "checkout" first');
     }
 
-    const {diffs, revision, level} = await this._otNode.fetch(this._revision);
+    const prevRevision = this._revision;
+    const fetchData = await fetchFunction(this._revision);
 
-    const transformed = this._otSystem.transform(
-      this._otSystem.squash(this._workingOperations),
-      this._otSystem.squash(diffs)
-    );
+    if (prevRevision !== this._revision) {
+      return;
+    }
 
-    this._apply(transformed.leftOps);
-
-    this._workingOperations = transformed.rightOps;
-    this._revision = revision;
-    this._level = level;
+    this._applyFetchData(fetchData);
   }
 
   async _commit(): Promise<void> {
@@ -154,7 +148,6 @@ export class OTStateManager<TKey, TState> {
       diffs,
       this._level + 1
     );
-    this._pendingCommitOperations = workingOperations;
     this._workingOperations = this._workingOperations.slice(workingOperations.length);
   }
 
@@ -166,11 +159,22 @@ export class OTStateManager<TKey, TState> {
       throw new Error('Need to call "_commit" first');
     }
 
-    const level = this._level;
-
-    this._revision = await this._otNode.push(this._pendingCommit);
+    const fetchData = await this._otNode.push(this._pendingCommit);
+    this._applyFetchData(fetchData);
     this._pendingCommit = null;
-    this._level = level + 1;
+  }
+
+  _applyFetchData(fetchData: fetchData<TKey, TState>): void {
+    const transformed = this._otSystem.transform(
+      this._otSystem.squash(this._workingOperations),
+      this._otSystem.squash(fetchData.diffs)
+    );
+
+    this._apply(transformed.leftOps);
+
+    this._workingOperations = transformed.rightOps;
+    this._revision = fetchData.revision;
+    this._level = fetchData.level;
   }
 
   _apply(operations: Array<OTOperation<TState>>): void {
@@ -188,8 +192,22 @@ export class OTStateManager<TKey, TState> {
     this._level = null;
     this._revision = null;
     this._workingOperations = [];
-    this._pendingCommitOperations = [];
     this._pendingCommit = null;
     this._state = this._initState();
+  }
+
+  _startPolling(): void {
+    if (this._eventEmitter.listenerCount('change') === 0) {
+      return;
+    }
+
+    this._poll = this._pull(commitId => {
+      return this._otNode.poll(commitId)
+    })
+      .then(() => {
+        this._eventEmitter.emit('change', this._state);
+        this._startPolling();
+      })
+      .catch(() => this._startPolling());
   }
 }

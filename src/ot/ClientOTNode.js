@@ -9,7 +9,6 @@
 // @flow
 
 import path from 'path';
-import EventEmitter from 'events';
 
 import type {OTOperation} from "./interfaces/OTOperation";
 import type {OTNode, fetchData} from "./interfaces/OTNode";
@@ -42,14 +41,12 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
   _keySerializer: JsonSerializer<TKey>;
   _diffSerializer: JsonSerializer<OTOperation<TState>>;
   _fetch: typeof fetch;
-  _eventEmitter: EventEmitter;
 
   constructor(options: otNodeOptions<TKey, TState>) {
     this._url = options.url;
     this._diffSerializer = options.diffSerializer;
     this._keySerializer = options.keySerializer;
     this._fetch = options.fetch || window.fetch.bind(window);
-    this._eventEmitter = new EventEmitter();
   }
 
   static createWithJsonKey<TState>(
@@ -82,12 +79,17 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
     return await response.blob();
   }
 
-  async push(commitData: Blob): Promise<TKey> {
+  async push(commitData: Blob): Promise<fetchData<TKey, TState>> {
     const response = await this._fetch(path.join(this._url, 'push'), {
       method: 'POST',
       body: commitData
     });
-    return this._keySerializer.deserialize(await response.json());
+    const json = await response.json();
+    return {
+      revision: this._keySerializer.deserialize(json.id),
+      level: json.level,
+      diffs: json.diffs.map(diff => this._diffSerializer.deserialize(diff))
+    };
   }
 
   async checkout(): Promise<fetchData<TKey, TState>> {
@@ -101,9 +103,20 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
   }
 
   async fetch(currentCommitId: TKey): Promise<fetchData<TKey, TState>> {
+    return this._fetchRequest(currentCommitId, false);
+  }
+
+  async poll(currentCommitId: TKey): Promise<fetchData<TKey, TState>> {
+    return this._fetchRequest(currentCommitId, true);
+  }
+
+  async _fetchRequest(
+    currentCommitId: TKey,
+    usePolling: boolean
+  ): Promise<fetchData<TKey, TState>> {
     const serializedKey = this._keySerializer.serialize(currentCommitId);
     const response = await this._fetch(
-      path.join(this._url, 'fetch')
+      path.join(this._url, usePolling ? 'poll' : 'fetch')
       + '?id=' + encodeURIComponent(JSON.stringify(serializedKey))
     );
     const json = await response.json();
@@ -112,13 +125,5 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
       level: json.level,
       diffs: json.diffs.map(diff => this._diffSerializer.deserialize(diff))
     };
-  }
-
-  addChangeListener(listener: () => void): void {
-    this._eventEmitter.addListener('change', listener);
-  }
-
-  removeChangeListener(listener: () => void): void {
-    this._eventEmitter.removeListener('change', listener);
   }
 }
