@@ -52,9 +52,14 @@ export function isEqual<T>(a: Set<T>, b: Set<T>): boolean {
   return true;
 }
 
+type serialAsyncRunnable = {
+  (): Promise<void>,
+  isRunning: () => boolean
+};
+
 export function serial(
   fn: () => Promise<void>
-): () => Promise<void> {
+): serialAsyncRunnable {
   let currentPromise = null;
   let nextPromise = null;
   let resolveNext = null;
