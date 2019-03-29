@@ -1,6 +1,6 @@
 {
   "name": "ot-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Operational transformation manager",
   "main": "./lib",
   "scripts": {

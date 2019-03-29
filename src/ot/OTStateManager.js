@@ -29,7 +29,6 @@ export class OTStateManager<TKey, TState> {
   _workingOperations: Array<OTOperation<TState>>;
   _pendingCommit: Blob | null;
   _eventEmitter: EventEmitter = new EventEmitter();
-  _poll: Promise<void> | null = null;
 
   constructor(
     initState: provider<TState>,
@@ -87,7 +86,7 @@ export class OTStateManager<TKey, TState> {
     assert(this._revision !== null, 'Checkout has not been called');
 
     if (this._pendingCommit === null) {
-      await this._pull(commitId => this._otNode.fetch(commitId));
+      await this._pull();
     } else {
       await this._push();
     }
@@ -114,21 +113,26 @@ export class OTStateManager<TKey, TState> {
     this._eventEmitter.emit('change', this._state);
   }
 
-  async _pull(
-    fetchFunction: TKey => Promise<fetchData<TKey, TState>>
-  ): Promise<void> {
+  async _pull(): Promise<void> {
+    if (this._revision === null) {
+      throw new Error('Need to call "checkout" first');
+    }
+
+    const fetchData = await this._otNode.fetch(this._revision);
+    this._applyFetchData(fetchData);
+  }
+
+  async _poll(): Promise<void> {
     if (this._revision === null) {
       throw new Error('Need to call "checkout" first');
     }
 
     const prevRevision = this._revision;
-    const fetchData = await fetchFunction(this._revision);
+    const fetchData = await this._otNode.poll(this._revision);
 
-    if (prevRevision !== this._revision) {
-      return;
+    if (!this.sync.isRunning() && prevRevision === this._revision) {
+      this._applyFetchData(fetchData);
     }
-
-    this._applyFetchData(fetchData);
   }
 
   async _commit(): Promise<void> {
@@ -201,9 +205,7 @@ export class OTStateManager<TKey, TState> {
       return;
     }
 
-    this._poll = this._pull(commitId => {
-      return this._otNode.poll(commitId)
-    })
+    this._poll()
       .then(() => {
         this._eventEmitter.emit('change', this._state);
         this._startPolling();

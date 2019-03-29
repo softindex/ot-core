@@ -60,7 +60,7 @@ export function serial(
   let resolveNext = null;
   let rejectNext = null;
 
-  return function start(): Promise<void> {
+  function start(): Promise<void> {
     if (currentPromise) {
       if (!nextPromise) {
         nextPromise = new Promise((resolve, reject) => {
@@ -85,5 +85,11 @@ export function serial(
       });
 
     return currentPromise;
+  }
+
+  start.isRunning = function () {
+    return currentPromise !== null;
   };
+
+  return start;
 }
