@@ -24,11 +24,12 @@ export class OTStateManager<TKey, TState> {
   _otSystem: OTSystem<TState>;
 
   _state: TState;
-  _revision: TKey | null;
-  _level: number | null;
-  _workingOperations: Array<OTOperation<TState>>;
-  _pendingCommit: Blob | null;
+  _revision: TKey | null = null;
+  _level: number | null = null;
+  _workingOperations: Array<OTOperation<TState>> = [];
+  _pendingCommit: Blob | null = null;
   _eventEmitter: EventEmitter = new EventEmitter();
+  _stopPolling: null | () => void = null;
 
   constructor(
     initState: provider<TState>,
@@ -38,8 +39,7 @@ export class OTStateManager<TKey, TState> {
     this._initState = initState;
     this._otNode = node;
     this._otSystem = otSystem;
-
-    this._invalidateInternalState();
+    this._state = this._initState();
   }
 
   getState(): TState {
@@ -60,6 +60,10 @@ export class OTStateManager<TKey, TState> {
 
   removeChangeListener(listener: TState => void): void {
     this._eventEmitter.removeListener('change', listener);
+
+    if (this._eventEmitter.listenerCount('change') === 0 && this._stopPolling) {
+      this._stopPolling();
+    }
   }
 
   async checkout() {
@@ -98,16 +102,11 @@ export class OTStateManager<TKey, TState> {
   });
 
   add(operations: Array<OTOperation<TState>>): void {
-    try {
-      for (const op of operations) {
-        if (!this._otSystem.isEmpty(op)) {
-          this._workingOperations.push(op);
-          this._state = op.apply(this._state);
-        }
+    for (const op of operations) {
+      if (!this._otSystem.isEmpty(op)) {
+        this._workingOperations.push(op);
+        this._state = op.apply(this._state);
       }
-    } catch (e) {
-      this._invalidateInternalState();
-      throw e;
     }
 
     this._eventEmitter.emit('change', this._state);
@@ -128,7 +127,9 @@ export class OTStateManager<TKey, TState> {
     }
 
     const prevRevision = this._revision;
-    const fetchData = await this._otNode.poll(this._revision);
+    const polling = this._otNode.poll(this._revision);
+    this._stopPolling = polling.cancel;
+    const fetchData = await polling.promise;
 
     if (!this.sync.isRunning() && prevRevision === this._revision) {
       this._applyFetchData(fetchData);
@@ -182,22 +183,9 @@ export class OTStateManager<TKey, TState> {
   }
 
   _apply(operations: Array<OTOperation<TState>>): void {
-    try {
-      for (const op of operations) {
-        this._state = op.apply(this._state);
-      }
-    } catch (e) {
-      this._invalidateInternalState();
-      throw e;
+    for (const op of operations) {
+      this._state = op.apply(this._state);
     }
-  }
-
-  _invalidateInternalState(): void {
-    this._level = null;
-    this._revision = null;
-    this._workingOperations = [];
-    this._pendingCommit = null;
-    this._state = this._initState();
   }
 
   _startPolling(): void {

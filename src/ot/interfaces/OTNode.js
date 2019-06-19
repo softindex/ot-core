@@ -16,6 +16,11 @@ export type fetchData<TKey, TState> = {
   level: number
 };
 
+export type promiseAndCancel<T> = {
+  promise: Promise<T>,
+  cancel: () => void
+};
+
 export interface OTNode<TKey, TState> {
   createCommit(
     parentCommitId: TKey,
@@ -29,5 +34,5 @@ export interface OTNode<TKey, TState> {
 
   fetch(currentCommitId: TKey): Promise<fetchData<TKey, TState>>;
 
-  poll(currentCommitId: TKey): Promise<fetchData<TKey, TState>>;
+  poll(currentCommitId: TKey): promiseAndCancel<fetchData<TKey, TState>>;
 }

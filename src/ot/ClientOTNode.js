@@ -11,8 +11,8 @@
 import path from 'path';
 
 import type {OTOperation} from "./interfaces/OTOperation";
-import type {OTNode, fetchData} from "./interfaces/OTNode";
-import type {JsonSerializer, json} from "../common/interfaces/JsonSerializer";
+import type {OTNode, fetchData, promiseAndCancel} from "./interfaces/OTNode";
+import type {JsonSerializer, json} from "../common/types/JsonSerializer";
 
 type otNodeOptions<TKey, TState> = {
   url: string,
@@ -102,28 +102,44 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
     };
   }
 
-  async fetch(currentCommitId: TKey): Promise<fetchData<TKey, TState>> {
-    return this._fetchRequest(currentCommitId, false);
+  fetch(currentCommitId: TKey): Promise<fetchData<TKey, TState>> {
+    return this._fetchRequest(currentCommitId, null);
   }
 
-  async poll(currentCommitId: TKey): Promise<fetchData<TKey, TState>> {
-    return this._fetchRequest(currentCommitId, true);
+  poll(
+    currentCommitId: TKey
+  ): promiseAndCancel<fetchData<TKey, TState>> {
+    const abortController = new AbortController();
+    return {
+      promise: this._fetchRequest(currentCommitId, abortController.signal),
+      cancel() {
+        abortController.abort();
+      }
+    };
   }
 
   async _fetchRequest(
     currentCommitId: TKey,
-    usePolling: boolean
+    stopPollingSignal: AbortSignal | null
   ): Promise<fetchData<TKey, TState>> {
     const serializedKey = this._keySerializer.serialize(currentCommitId);
-    const response = await this._fetch(
-      path.join(this._url, usePolling ? 'poll' : 'fetch')
+    const url = (
+      path.join(this._url, stopPollingSignal ? 'poll' : 'fetch')
       + '?id=' + encodeURIComponent(JSON.stringify(serializedKey))
     );
+
+    const response = await this._fetch(url, {
+      signal: stopPollingSignal
+    });
+
     const json = await response.json();
+
     return {
       revision: this._keySerializer.deserialize(json.id),
       level: json.level,
-      diffs: json.diffs.map(diff => this._diffSerializer.deserialize(diff))
+      diffs: json.diffs.map(diff => (
+        this._diffSerializer.deserialize(diff)
+      ))
     };
   }
 }
