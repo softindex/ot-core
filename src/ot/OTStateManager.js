@@ -12,7 +12,7 @@ import assert from 'assert';
 import EventEmitter from 'events';
 import {serial} from '../common/utils';
 
-import type OTSystem from "./OTSystem/OTSystem";
+import type OTSystemImpl from "./OTSystem/OTSystemImpl";
 import type {OTOperation} from "./interfaces/OTOperation";
 import type {OTNode, fetchData} from "./interfaces/OTNode";
 
@@ -23,7 +23,7 @@ const DEFAULT_RETRY_TIMEOUT = 1000;
 export class OTStateManager<TKey, TState> {
   _initState: provider<TState>;
   _otNode: OTNode<TKey, TState>;
-  _otSystem: OTSystem<TState>;
+  _otSystem: OTSystemImpl<TState>;
   _retryTimeout: number;
 
   _state: TState;
@@ -38,7 +38,7 @@ export class OTStateManager<TKey, TState> {
   constructor(
     initState: provider<TState>,
     node: OTNode<TKey, TState>,
-    otSystem: OTSystem<TState>,
+    otSystem: OTSystemImpl<TState>,
     retryTimeout: number = DEFAULT_RETRY_TIMEOUT
   ) {
     this._initState = initState;

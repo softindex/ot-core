@@ -8,11 +8,11 @@
 
 // @flow
 
-import OTSystem from "./OTSystem";
+import OTSystemImpl from "./OTSystemImpl";
 import {ensureMapValue} from '../../common/utils';
 import {OTOperation} from "../interfaces/OTOperation";
 
-import type {transformer, squasher, emptyPredicate, inverter} from './OTSystem';
+import type {transformer, squasher, emptyPredicate, inverter} from './OTSystemImpl';
 import {TransformResult} from "./TransformResult";
 
 export class OTSystemBuilder<S> {
@@ -28,8 +28,8 @@ export class OTSystemBuilder<S> {
     this._inverters = new Map();
   }
 
-  build(): OTSystem<S> {
-    return new OTSystem(this._transformers, this._squashers, this._emptyPredicated, this._inverters);
+  build(): OTSystemImpl<S> {
+    return new OTSystemImpl(this._transformers, this._squashers, this._emptyPredicated, this._inverters);
   }
 
   withTransformFunction(LeftOp: Class<OTOperation<S>>, RightOp: Class<OTOperation<S>>, transformer: transformer<S>): OTSystemBuilder<S> {
