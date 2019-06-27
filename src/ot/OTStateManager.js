@@ -18,10 +18,13 @@ import type {OTNode, fetchData} from "./interfaces/OTNode";
 
 type provider<T> = () => T;
 
+const DEFAULT_RETRY_TIMEOUT = 1000;
+
 export class OTStateManager<TKey, TState> {
   _initState: provider<TState>;
   _otNode: OTNode<TKey, TState>;
   _otSystem: OTSystem<TState>;
+  _retryTimeout: number;
 
   _state: TState;
   _revision: TKey | null = null;
@@ -30,16 +33,19 @@ export class OTStateManager<TKey, TState> {
   _pendingCommit: Blob | null = null;
   _eventEmitter: EventEmitter = new EventEmitter();
   _stopPolling: null | () => void = null;
+  _retryTimeoutId: TimeoutID | null = null;
 
   constructor(
     initState: provider<TState>,
     node: OTNode<TKey, TState>,
-    otSystem: OTSystem<TState>
+    otSystem: OTSystem<TState>,
+    retryTimeout: number = DEFAULT_RETRY_TIMEOUT
   ) {
     this._initState = initState;
     this._otNode = node;
     this._otSystem = otSystem;
     this._state = this._initState();
+    this._retryTimeout = retryTimeout;
   }
 
   getState(): TState {
@@ -61,8 +67,8 @@ export class OTStateManager<TKey, TState> {
   removeChangeListener(listener: TState => void): void {
     this._eventEmitter.removeListener('change', listener);
 
-    if (this._eventEmitter.listenerCount('change') === 0 && this._stopPolling) {
-      this._stopPolling();
+    if (this._eventEmitter.listenerCount('change') === 0) {
+      this._stop();
     }
   }
 
@@ -129,7 +135,19 @@ export class OTStateManager<TKey, TState> {
     const prevRevision = this._revision;
     const polling = this._otNode.poll(this._revision);
     this._stopPolling = polling.cancel;
-    const fetchData = await polling.promise;
+
+    let fetchData;
+    try {
+      fetchData = await polling.promise;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return;
+      }
+
+      throw err;
+    } finally {
+      this._stopPolling = null;
+    }
 
     if (!this.sync.isRunning() && prevRevision === this._revision) {
       this._applyFetchData(fetchData);
@@ -189,7 +207,7 @@ export class OTStateManager<TKey, TState> {
   }
 
   _startPolling(): void {
-    if (this._eventEmitter.listenerCount('change') === 0) {
+    if (this._eventEmitter.listenerCount('change') === 0 || this._stopPolling) {
       return;
     }
 
@@ -198,6 +216,20 @@ export class OTStateManager<TKey, TState> {
         this._eventEmitter.emit('change', this._state);
         this._startPolling();
       })
-      .catch(() => this._startPolling());
+      .catch((err) => {
+        console.error(err);
+
+        this._retryTimeoutId = setTimeout(() => {
+          this._startPolling();
+        }, this._retryTimeout);
+      });
+  }
+
+  _stop() {
+    clearTimeout(this._retryTimeoutId);
+
+    if (this._stopPolling) {
+      this._stopPolling();
+    }
   }
 }

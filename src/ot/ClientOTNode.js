@@ -76,6 +76,11 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
         diffs: diffs.map(diff => this._diffSerializer.serialize(diff))
       })
     });
+
+    if (!response.ok) {
+      throw new Error(response.statusText);
+    }
+
     return await response.blob();
   }
 
@@ -84,6 +89,11 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
       method: 'POST',
       body: commitData
     });
+
+    if (!response.ok) {
+      throw new Error(response.statusText);
+    }
+
     const json = await response.json();
     return {
       revision: this._keySerializer.deserialize(json.id),
@@ -94,6 +104,11 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
 
   async checkout(): Promise<fetchData<TKey, TState>> {
     const response = await this._fetch(path.join(this._url, 'checkout'));
+
+    if (!response.ok) {
+      throw new Error(response.statusText);
+    }
+
     const json = await response.json();
     return {
       revision: this._keySerializer.deserialize(json.id),
@@ -131,6 +146,10 @@ export class ClientOTNode<TKey, TState> implements OTNode<TKey, TState> {
     const response = await this._fetch(url, {
       signal: stopPollingSignal
     });
+
+    if (!response.ok) {
+      throw new Error(response.statusText);
+    }
 
     const json = await response.json();
 
