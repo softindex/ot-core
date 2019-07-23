@@ -92,6 +92,18 @@ export class OTStateManager<TKey, TState> {
     this._startPolling();
   }
 
+  checkoutRoot(rootRevision: TKey): void {
+    // Ignore if already initialized
+    if (this._revision !== null) {
+      return;
+    }
+
+    this._revision = rootRevision;
+    this._level = 1;
+
+    this._startPolling();
+  }
+
   sync = serial(async (): Promise<void> => {
     assert(this._revision !== null, 'Checkout has not been called');
 
