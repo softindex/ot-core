@@ -9,6 +9,7 @@
 export {OTStateManager} from './ot/OTStateManager';
 export {TransformResult} from './ot/OTSystem/TransformResult';
 export {OTSystemBuilder} from './ot/OTSystem/OTSystemBuilder';
+export {MergedOTSystem} from './ot/OTSystem/MergedOTSystem';
 export {OTCommit} from './ot/OTCommit';
 export {ClientOTNode} from './ot/ClientOTNode';
 export {commitsToGraphviz, makeCheckpointForCommit, merge} from './ot/otUtils';

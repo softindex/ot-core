@@ -12,7 +12,7 @@ import Queue from 'tinyqueue';
 import type {OTRemote} from "./interfaces/OTRemote";
 import {OTCommit} from "./OTCommit";
 import type {OTOperation} from "./interfaces/OTOperation";
-import OTSystem from "./OTSystem/OTSystem";
+import OTSystemImpl from "./OTSystem/OTSystemImpl";
 import {unwrap, difference} from '../common/utils';
 
 type comparator<T> = (T, T) => number;
@@ -28,7 +28,7 @@ export type findResult<K, S> = {
   parentToChild: Array<OTOperation<S>>
 } | null;
 
-export async function makeCheckpointForCommit<K, S>(otResolver: OTSystem<S>,
+export async function makeCheckpointForCommit<K, S>(otResolver: OTSystemImpl<S>,
                                                     remote: OTRemote<K, S>,
                                                     commitIdComparator: comparator<K>,
                                                     commitId: K): Promise<Array<OTOperation<S>>> {
@@ -202,7 +202,7 @@ function withoutSubnodes<S>(startNodes: Set<$FlowFixMe>,
 }
 
 function doMerge<S>(startNodes: Set<$FlowFixMe>,
-                    otResolver: OTSystem<S>,
+                    otResolver: OTSystemImpl<S>,
                     opsState: Map<$FlowFixMe, Set<$FlowFixMe>>,
                     commits: commits<S>): $FlowFixMe | null {
   if (startNodes.size === 1) {
@@ -291,7 +291,7 @@ function doMerge<S>(startNodes: Set<$FlowFixMe>,
   return newCommitId;
 }
 
-export async function merge<K, S>(otResolver: OTSystem<S>,
+export async function merge<K, S>(otResolver: OTSystemImpl<S>,
                                   otRemote: OTRemote<K, S>,
                                   commitIdComparator: comparator<K>,
                                   startNodes: Set<K>): Promise<Map<K, Array<OTOperation<S>>>> {

@@ -13,9 +13,9 @@ import {OTSystemBuilder} from '../ot/OTSystem/OTSystemBuilder';
 import TestAddOp from './TestAddOp';
 import TestSetOp from './TestSetOp';
 
-import type OTSystem from '../ot/OTSystem/OTSystem';
+import type OTSystemImpl from '../ot/OTSystem/OTSystemImpl';
 
-const testOTResolver: OTSystem<number> = new OTSystemBuilder()
+const testOTResolver: OTSystemImpl<number> = new OTSystemBuilder()
   .withTransformFunction(TestAddOp, TestAddOp, (leftOp: TestAddOp, rightOp: TestAddOp) => {
     return TransformResult.of([
       new TestAddOp(leftOp.prev + leftOp.delta, rightOp.delta)

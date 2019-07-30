@@ -10,13 +10,14 @@
 
 import {TransformResult} from './TransformResult';
 import {OTOperation} from "../interfaces/OTOperation";
+import type {OTSystem} from "../interfaces/OTSystem";
 
 export type transformer<S> = ($FlowFixMe, $FlowFixMe) => TransformResult<S>;
 export type squasher<S> = ($FlowFixMe, $FlowFixMe) => ?OTOperation<S>;
 export type emptyPredicate<S> = ($FlowFixMe) => boolean;
 export type inverter<S> = ($FlowFixMe) => OTOperation<S>;
 
-class OTSystem<S> {
+class OTSystemImpl<S> implements OTSystem<S> {
   _transformers: Map<Class<OTOperation<S>>, Map<Class<OTOperation<S>>, transformer<S>>>;
   _squashers: Map<Class<OTOperation<S>>, Map<Class<OTOperation<S>>, squasher<S>>>;
   _emptyPredicates: Map<Class<OTOperation<S>>, emptyPredicate<S>>;
@@ -219,4 +220,4 @@ class OTSystem<S> {
   }
 }
 
-export default OTSystem;
+export default OTSystemImpl;
