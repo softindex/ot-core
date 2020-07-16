@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "cross-fetch": "^3.0.1",
-    "lodash": "^4.17.4",
+    "lodash": "^4.17.19",
     "node-fetch": "^2.3.0",
     "tinyqueue": "^1.2.2",
     "whatwg-fetch": "^3.0.0"
